@@ -2,7 +2,6 @@ import React, {
   useEffect,
   useMemo,
   useState,
-  useRef
 } from "react";
 
 import {
@@ -39,9 +38,6 @@ function Orders() {
 
   const [orders, setOrders] =
     useState([]);
-
-    const ordersRef =
-    useRef([]);  
 
   const [expandedOrderId, setExpandedOrderId] =
     useState(null);
@@ -84,10 +80,6 @@ function Orders() {
 
         // --------------------------------------
         // BACKWARD COMPATIBILITY
-        // --------------------------------------
-        // If older version only saved:
-        // automateCafeOrderId
-        // bring that order into history.
         // --------------------------------------
 
         const latestSavedId =
@@ -141,7 +133,7 @@ function Orders() {
             .filter(
               (result) =>
                 result.status ===
-                "fulfilled" &&
+                  "fulfilled" &&
                 result.value
             )
             .map(
@@ -209,117 +201,152 @@ function Orders() {
 
   }, []);
 
-// ==========================================
-// AUTO REFRESH ORDER STATUS
-// ==========================================
 
-useEffect(() => {
+  // ==========================================
+  // AUTO REFRESH ORDER STATUS
+  // ==========================================
 
-  if (!orders.length) {
-    return;
-  }
+  useEffect(() => {
 
-
-  const refreshOrders = async () => {
-
-    try {
-
-      // Get the latest order IDs from
-      // the current state at refresh time.
-      setOrders((currentOrders) => {
-
-        if (!currentOrders.length) {
-          return currentOrders;
-        }
-
-        return currentOrders;
-
-      });
-
-      const currentOrderIds =
-        orders.map(
-          (order) => order._id
-        );
+    if (!orders.length) {
+      return undefined;
+    }
 
 
-      const updatedResults =
-        await Promise.allSettled(
-          currentOrderIds.map(
-            (orderId) =>
-              getOrder(orderId)
-          )
-        );
+    let cancelled = false;
 
 
-      const updatedOrders =
-        updatedResults
-          .filter(
-            (result) =>
-              result.status ===
-                "fulfilled" &&
-              result.value
-          )
-          .map(
-            (result) =>
-              result.value
+    const refreshOrders = async () => {
+
+      try {
+
+        // --------------------------------------
+        // USE THE CURRENT ORDER LIST
+        // --------------------------------------
+
+        const currentOrderIds =
+          orders.map(
+            (order) =>
+              order._id
           );
 
 
-      if (!updatedOrders.length) {
-        return;
+        if (!currentOrderIds.length) {
+          return;
+        }
+
+
+        // --------------------------------------
+        // FETCH LATEST STATUS
+        // --------------------------------------
+
+        const updatedResults =
+          await Promise.allSettled(
+            currentOrderIds.map(
+              (orderId) =>
+                getOrder(orderId)
+            )
+          );
+
+
+        if (cancelled) {
+          return;
+        }
+
+
+        const updatedOrders =
+          updatedResults
+            .filter(
+              (result) =>
+                result.status ===
+                  "fulfilled" &&
+                result.value
+            )
+            .map(
+              (result) =>
+                result.value
+            );
+
+
+        if (!updatedOrders.length) {
+          return;
+        }
+
+
+        // --------------------------------------
+        // UPDATE ONLY CHANGED ORDERS
+        // --------------------------------------
+
+        setOrders(
+          (currentOrders) =>
+            currentOrders.map(
+              (currentOrder) => {
+
+                const updatedOrder =
+                  updatedOrders.find(
+                    (order) =>
+                      order._id ===
+                      currentOrder._id
+                  );
+
+
+                return updatedOrder ||
+                  currentOrder;
+
+              }
+            )
+        );
+
+      } catch (error) {
+
+        if (!cancelled) {
+
+          console.error(
+            "Failed to refresh order status:",
+            error
+          );
+
+        }
+
       }
 
-
-      setOrders(
-        (currentOrders) =>
-          currentOrders.map(
-            (currentOrder) => {
-
-              const updatedOrder =
-                updatedOrders.find(
-                  (order) =>
-                    order._id ===
-                    currentOrder._id
-                );
+    };
 
 
-              return updatedOrder ||
-                currentOrder;
+    // ----------------------------------------
+    // CHECK IMMEDIATELY
+    // ----------------------------------------
 
-            }
-          )
+    refreshOrders();
+
+
+    // ----------------------------------------
+    // CHECK EVERY 5 SECONDS
+    // ----------------------------------------
+
+    const interval =
+      setInterval(
+        refreshOrders,
+        5000
       );
 
-    } catch (error) {
 
-      console.error(
-        "Failed to refresh order status:",
-        error
+    // ----------------------------------------
+    // CLEANUP
+    // ----------------------------------------
+
+    return () => {
+
+      cancelled = true;
+
+      clearInterval(
+        interval
       );
 
-    }
-
-  };
+    };
 
 
-  // Check immediately
-  refreshOrders();
-
-
-  // Check every 5 seconds
-  const interval =
-    setInterval(
-      refreshOrders,
-      5000
-    );
-
-
-  return () => {
-    clearInterval(interval);
-  };
-
-
-}, [orders]);
+  }, [orders]);
 
 
   // ==========================================
@@ -343,7 +370,7 @@ useEffect(() => {
   ) => {
 
     switch (
-    order?.status
+      order?.status
     ) {
 
       case "pending":
@@ -418,11 +445,14 @@ useEffect(() => {
           label:
             order?.status ||
             "Unknown",
+
           shortLabel:
             order?.status ||
             "Unknown",
+
           description:
             "Order status updated.",
+
           icon: Clock3,
         };
 
@@ -442,6 +472,7 @@ useEffect(() => {
     if (!date) {
       return "Unknown date";
     }
+
 
     return new Date(
       date
@@ -824,6 +855,10 @@ useEffect(() => {
   }
 
 
+  // ==========================================
+  // LATEST ORDER DATA
+  // ==========================================
+
   const latestStatus =
     getStatusInfo(
       latestOrder
@@ -1144,9 +1179,11 @@ useEffect(() => {
 
         </section>
 
-        {/* ===================================
-    CUSTOMER NOTE
-==================================== */}
+
+
+        {/* =====================================
+              CUSTOMER NOTE
+          ====================================== */}
 
         {latestOrder.notes &&
           latestOrder.notes.trim() && (
@@ -1185,6 +1222,7 @@ useEffect(() => {
             </section>
 
           )}
+
 
 
         {/* =====================================
@@ -1524,9 +1562,11 @@ useEffect(() => {
 
                           </div>
 
+
+
                           {/* =====================================
-    PREVIOUS ORDER NOTE
-====================================== */}
+                                PREVIOUS ORDER NOTE
+                            ====================================== */}
 
                           {previousOrder.notes &&
                             previousOrder.notes.trim() && (
@@ -1546,12 +1586,15 @@ useEffect(() => {
                                 </div>
 
                                 <p>
-                                  {previousOrder.notes}
+                                  {
+                                    previousOrder.notes
+                                  }
                                 </p>
 
                               </div>
 
                             )}
+
 
 
                           <div className="orders-history-footer">
@@ -1627,13 +1670,19 @@ useEffect(() => {
         )}
 
 
-        {error && orders.length > 0 && (
 
-          <div className="orders-inline-error">
-            {error}
-          </div>
+        {/* =====================================
+              INLINE ERROR
+          ====================================== */}
 
-        )}
+        {error &&
+          orders.length > 0 && (
+
+            <div className="orders-inline-error">
+              {error}
+            </div>
+
+          )}
 
       </section>
 
