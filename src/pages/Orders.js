@@ -2,6 +2,7 @@ import React, {
   useEffect,
   useMemo,
   useState,
+  useRef
 } from "react";
 
 import {
@@ -38,6 +39,9 @@ function Orders() {
 
   const [orders, setOrders] =
     useState([]);
+
+    const ordersRef =
+    useRef([]);  
 
   const [expandedOrderId, setExpandedOrderId] =
     useState(null);
@@ -205,7 +209,7 @@ function Orders() {
 
   }, []);
 
-  // ==========================================
+// ==========================================
 // AUTO REFRESH ORDER STATUS
 // ==========================================
 
@@ -220,10 +224,29 @@ useEffect(() => {
 
     try {
 
+      // Get the latest order IDs from
+      // the current state at refresh time.
+      setOrders((currentOrders) => {
+
+        if (!currentOrders.length) {
+          return currentOrders;
+        }
+
+        return currentOrders;
+
+      });
+
+      const currentOrderIds =
+        orders.map(
+          (order) => order._id
+        );
+
+
       const updatedResults =
         await Promise.allSettled(
-          orders.map((currentOrder) =>
-            getOrder(currentOrder._id)
+          currentOrderIds.map(
+            (orderId) =>
+              getOrder(orderId)
           )
         );
 
@@ -232,7 +255,8 @@ useEffect(() => {
         updatedResults
           .filter(
             (result) =>
-              result.status === "fulfilled" &&
+              result.status ===
+                "fulfilled" &&
               result.value
           )
           .map(
@@ -246,27 +270,25 @@ useEffect(() => {
       }
 
 
-      setOrders((currentOrders) => {
+      setOrders(
+        (currentOrders) =>
+          currentOrders.map(
+            (currentOrder) => {
 
-        return currentOrders.map(
-          (currentOrder) => {
-
-            const updatedOrder =
-              updatedOrders.find(
-                (order) =>
-                  order._id ===
-                  currentOrder._id
-              );
+              const updatedOrder =
+                updatedOrders.find(
+                  (order) =>
+                    order._id ===
+                    currentOrder._id
+                );
 
 
-            return updatedOrder
-              ? updatedOrder
-              : currentOrder;
+              return updatedOrder ||
+                currentOrder;
 
-          }
-        );
-
-      });
+            }
+          )
+      );
 
     } catch (error) {
 
@@ -297,12 +319,7 @@ useEffect(() => {
   };
 
 
-// IMPORTANT:
-// Do not use [orders] here because that would
-// continuously recreate the interval whenever
-// orders are updated.
-
-}, [orders.length]);
+}, [orders]);
 
 
   // ==========================================

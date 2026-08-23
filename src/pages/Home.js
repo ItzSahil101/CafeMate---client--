@@ -9,7 +9,6 @@ import {
   MapPin,
   ShoppingBag,
   Utensils,
-  ClipboardList,
 } from "lucide-react";
 
 import { Link } from "react-router-dom";
@@ -38,9 +37,6 @@ function Home() {
   const [loading, setLoading] =
     useState(true);
 
-  const [error, setError] =
-    useState("");
-
 
   // ==========================================
   // LOAD REAL CAFE + MENU
@@ -53,7 +49,6 @@ function Home() {
       try {
 
         setLoading(true);
-        setError("");
 
 
         const [
@@ -118,11 +113,6 @@ function Home() {
         console.error(
           "Failed to load home data:",
           error
-        );
-
-        setError(
-          error.message ||
-          "Failed to load cafe information."
         );
 
       } finally {
