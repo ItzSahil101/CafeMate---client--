@@ -14,6 +14,7 @@ import {
 import {
   useNavigate,
   useParams,
+  useLocation,
 } from "react-router-dom";
 
 import {
@@ -28,6 +29,8 @@ function OrderSuccess() {
   const navigate = useNavigate();
 
   const { orderId } = useParams();
+
+  const location = useLocation();
 
 
   // ==========================================
@@ -50,6 +53,9 @@ function OrderSuccess() {
 
   useEffect(() => {
 
+    let mounted = true;
+
+
     const loadOrder = async () => {
 
       try {
@@ -58,102 +64,241 @@ function OrderSuccess() {
         setError("");
 
 
-        // --------------------------------------
-        // GET ORDER ID
-        // --------------------------------------
+        // ======================================
+        // 1. GET ORDER ID FROM URL PARAM
+        // ======================================
 
         let savedOrderId =
-          orderId ||
-          localStorage.getItem(
-            "automateCafeOrderId"
-          );
+          orderId || null;
 
 
-        // --------------------------------------
-        // BACKUP:
-        // GET MOST RECENT ORDER ID
-        // --------------------------------------
+        // ======================================
+        // 2. CHECK QUERY PARAM
+        // Supports:
+        // /order-success?orderId=xxxx
+        // ======================================
 
         if (!savedOrderId) {
 
-          const savedOrderIds =
+          const queryParams =
+            new URLSearchParams(
+              location.search
+            );
+
+          savedOrderId =
+            queryParams.get("orderId");
+
+        }
+
+
+        // ======================================
+        // 3. GET ORDER IDS FROM LOCAL STORAGE
+        // ======================================
+
+        let savedOrderIds = [];
+
+        try {
+
+          savedOrderIds =
             JSON.parse(
               localStorage.getItem(
                 "automateCafeOrderIds"
               )
             ) || [];
 
+        } catch (storageError) {
 
-          if (savedOrderIds.length > 0) {
+          console.warn(
+            "Could not read saved order IDs:",
+            storageError
+          );
 
-            savedOrderId =
-              savedOrderIds[0];
-
-          }
+          savedOrderIds = [];
 
         }
 
 
-        // --------------------------------------
-        // NO ORDER ID
-        // --------------------------------------
+        // ======================================
+        // 4. MOST RECENT ORDER SHOULD WIN
+        //
+        // Orders.jsx also uses this storage.
+        // ======================================
+
+        if (
+          !savedOrderId &&
+          Array.isArray(savedOrderIds) &&
+          savedOrderIds.length > 0
+        ) {
+
+          savedOrderId =
+            savedOrderIds[0];
+
+        }
+
+
+        // ======================================
+        // 5. BACKWARD COMPATIBILITY
+        // ======================================
 
         if (!savedOrderId) {
 
-          setError(
-            "We couldn't find your order."
-          );
+          savedOrderId =
+            localStorage.getItem(
+              "automateCafeOrderId"
+            );
+
+        }
+
+
+        // ======================================
+        // 6. NO ORDER ID
+        // ======================================
+
+        if (!savedOrderId) {
+
+          if (mounted) {
+
+            setError(
+              "We couldn't find your order. Please open the Orders page and try again."
+            );
+
+          }
 
           return;
 
         }
 
 
-        // --------------------------------------
-        // FETCH REAL ORDER
-        // --------------------------------------
+        console.log(
+          "OrderSuccess: Loading order:",
+          savedOrderId
+        );
 
-        const orderData =
+
+        // ======================================
+        // 7. FETCH REAL ORDER
+        // EXACT SAME API USED BY ORDERS.JSX
+        // ======================================
+
+        const response =
           await getOrder(
             savedOrderId
           );
 
 
-        // --------------------------------------
-        // EXACTLY LIKE ORDERS.JSX
-        // --------------------------------------
+        console.log(
+          "OrderSuccess: API response:",
+          response
+        );
 
-        if (!orderData) {
+
+        // ======================================
+        // 8. NORMALIZE RESPONSE
+        //
+        // Normally getOrder() should directly
+        // return the order, exactly like Orders.jsx.
+        //
+        // These fallbacks also handle:
+        // { order: {...} }
+        // { data: {...} }
+        // ======================================
+
+        let orderData =
+          response;
+
+
+        if (
+          response &&
+          response.order
+        ) {
+
+          orderData =
+            response.order;
+
+        } else if (
+          response &&
+          response.data
+        ) {
+
+          orderData =
+            response.data;
+
+        }
+
+
+        // ======================================
+        // 9. VERIFY ORDER DATA
+        // ======================================
+
+        if (
+          !orderData ||
+          typeof orderData !== "object"
+        ) {
 
           throw new Error(
-            "Order data was not returned."
+            "Order data was not returned from the server."
           );
 
         }
 
 
-        setOrder(
+        // ======================================
+        // 10. VERIFY IMPORTANT ORDER FIELDS
+        // ======================================
+
+        console.log(
+          "OrderSuccess: Real order:",
           orderData
         );
 
+        console.log(
+          "OrderSuccess: Order number:",
+          orderData.orderNumber
+        );
+
+        console.log(
+          "OrderSuccess: Total amount:",
+          orderData.totalAmount
+        );
+
+        console.log(
+          "OrderSuccess: Status:",
+          orderData.status
+        );
+
+
+        if (mounted) {
+
+          setOrder(
+            orderData
+          );
+
+        }
 
       } catch (error) {
 
         console.error(
-          "Failed to load order:",
+          "OrderSuccess: Failed to load order:",
           error
         );
 
 
-        setError(
-          error?.message ||
-          "Failed to load your order."
-        );
+        if (mounted) {
 
+          setError(
+            error?.message ||
+            "Failed to load your order."
+          );
+
+        }
 
       } finally {
 
-        setLoading(false);
+        if (mounted) {
+
+          setLoading(false);
+
+        }
 
       }
 
@@ -162,11 +307,22 @@ function OrderSuccess() {
 
     loadOrder();
 
-  }, [orderId]);
+
+    return () => {
+
+      mounted = false;
+
+    };
+
+
+  }, [
+    orderId,
+    location.search,
+  ]);
 
 
   // ==========================================
-  // LOADING
+  // LOADING STATE
   // ==========================================
 
   if (loading) {
@@ -179,7 +335,9 @@ function OrderSuccess() {
 
           <div className="success-icon">
 
-            <Clock3 size={28} />
+            <Clock3
+              size={28}
+            />
 
           </div>
 
@@ -208,10 +366,13 @@ function OrderSuccess() {
 
 
   // ==========================================
-  // ERROR
+  // ERROR STATE
   // ==========================================
 
-  if (error || !order) {
+  if (
+    error ||
+    !order
+  ) {
 
     return (
 
@@ -221,7 +382,9 @@ function OrderSuccess() {
 
           <div className="success-icon">
 
-            <AlertCircle size={28} />
+            <AlertCircle
+              size={28}
+            />
 
           </div>
 
@@ -248,10 +411,10 @@ function OrderSuccess() {
               type="button"
               className="success-primary-button"
               onClick={() =>
-                navigate("/menu")
+                navigate("/orders")
               }
             >
-              Order something else
+              View my orders
             </button>
 
 
@@ -263,7 +426,9 @@ function OrderSuccess() {
               }
             >
 
-              <ArrowLeft size={14} />
+              <ArrowLeft
+                size={14}
+              />
 
               Back to cafe
 
@@ -289,20 +454,94 @@ function OrderSuccess() {
     "—";
 
 
+  // ==========================================
+  // REAL TOTAL
+  // ==========================================
+
   const totalAmount =
     Number(
       order.totalAmount
     ) || 0;
 
 
+  // ==========================================
+  // REAL STATUS
+  // ==========================================
+
   const status =
     order.status ||
     "pending";
 
 
+  // ==========================================
+  // STATUS LABEL
+  // ==========================================
+
   const statusLabel =
     status.charAt(0).toUpperCase() +
     status.slice(1);
+
+
+  // ==========================================
+  // STATUS MESSAGE
+  // ==========================================
+
+  let statusTitle =
+    "Your order is being processed";
+
+  let statusDescription =
+    "You can track your order from the Orders page.";
+
+
+  if (status === "pending") {
+
+    statusTitle =
+      "We're preparing your order";
+
+    statusDescription =
+      "The cafe will update your order status as it progresses.";
+
+  } else if (status === "accepted") {
+
+    statusTitle =
+      "Your order has been accepted";
+
+    statusDescription =
+      "The cafe has accepted your order and will prepare it shortly.";
+
+  } else if (status === "preparing") {
+
+    statusTitle =
+      "Your order is being prepared";
+
+    statusDescription =
+      "Your order is currently being freshly prepared.";
+
+  } else if (status === "ready") {
+
+    statusTitle =
+      "Your order is ready";
+
+    statusDescription =
+      "Your order is ready for pickup.";
+
+  } else if (status === "completed") {
+
+    statusTitle =
+      "Your order is completed";
+
+    statusDescription =
+      "Thank you for ordering from us.";
+
+  } else if (status === "cancelled") {
+
+    statusTitle =
+      "Your order was cancelled";
+
+    statusDescription =
+      "This order has been cancelled.";
+
+  }
 
 
   // ==========================================
@@ -322,10 +561,11 @@ function OrderSuccess() {
 
         <div className="success-icon">
 
-          <Check size={28} />
+          <Check
+            size={28}
+          />
 
         </div>
-
 
 
         {/* =====================================
@@ -333,7 +573,7 @@ function OrderSuccess() {
         ====================================== */}
 
         <p className="success-eyebrow">
-          Order placed
+          ORDER PLACED
         </p>
 
 
@@ -343,24 +583,22 @@ function OrderSuccess() {
 
 
         <p className="success-description">
-
           Your order has been received by the cafe.
           We'll start preparing it shortly.
-
         </p>
 
 
 
         {/* =====================================
-            ORDER NUMBER + TOTAL
+            REAL ORDER CARD
         ====================================== */}
 
         <section className="success-order-card">
 
 
-          {/* -------------------------------------
+          {/* ===================================
               ORDER NUMBER
-          -------------------------------------- */}
+          ==================================== */}
 
           <div className="success-order-top">
 
@@ -394,9 +632,9 @@ function OrderSuccess() {
 
 
 
-          {/* -------------------------------------
+          {/* ===================================
               REAL ORDER INFORMATION
-          -------------------------------------- */}
+          ==================================== */}
 
           <div className="success-order-info">
 
@@ -411,8 +649,13 @@ function OrderSuccess() {
 
 
               <strong>
+
                 Rs.{" "}
-                {totalAmount.toLocaleString()}
+
+                {totalAmount.toLocaleString(
+                  "en-IN"
+                )}
+
               </strong>
 
             </div>
@@ -428,7 +671,11 @@ function OrderSuccess() {
               </span>
 
 
-              <strong className="status-pending">
+              <strong
+                className={
+                  `status-${status}`
+                }
+              >
 
                 <span />
 
@@ -437,6 +684,7 @@ function OrderSuccess() {
               </strong>
 
             </div>
+
 
           </div>
 
@@ -448,12 +696,17 @@ function OrderSuccess() {
             STATUS
         ====================================== */}
 
-        <section className="success-status">
-
+        <section
+          className={
+            `success-status status-${status}`
+          }
+        >
 
           <div className="status-icon">
 
-            <Clock3 size={16} />
+            <Clock3
+              size={16}
+            />
 
           </div>
 
@@ -461,38 +714,12 @@ function OrderSuccess() {
           <div>
 
             <strong>
-              {status === "pending"
-                ? "We're preparing your order"
-                : status === "accepted"
-                  ? "Your order has been accepted"
-                  : status === "preparing"
-                    ? "Your order is being prepared"
-                    : status === "ready"
-                      ? "Your order is ready"
-                      : status === "completed"
-                        ? "Your order is completed"
-                        : status === "cancelled"
-                          ? "Your order was cancelled"
-                          : "Your order is being processed"}
+              {statusTitle}
             </strong>
 
 
             <p>
-
-              {status === "pending"
-                ? "The cafe will update your order status as it progresses."
-                : status === "accepted"
-                  ? "The cafe has accepted your order and will prepare it shortly."
-                  : status === "preparing"
-                    ? "Your order is currently being freshly prepared."
-                    : status === "ready"
-                      ? "Your order is ready for pickup."
-                      : status === "completed"
-                        ? "Thank you for ordering from us."
-                        : status === "cancelled"
-                          ? "This order has been cancelled."
-                          : "You can track your order from the Orders page."}
-
+              {statusDescription}
             </p>
 
           </div>
@@ -507,17 +734,32 @@ function OrderSuccess() {
 
         <div className="success-actions">
 
-
           <button
             type="button"
             className="success-primary-button"
             onClick={() =>
+              navigate("/orders")
+            }
+          >
+            View my order
+          </button>
+
+
+          <button
+            type="button"
+            className="success-secondary-button"
+            onClick={() =>
               navigate("/menu")
             }
           >
-            Order something else
-          </button>
 
+            <ShoppingBag
+              size={14}
+            />
+
+            Order something else
+
+          </button>
 
 
           <button
@@ -546,7 +788,11 @@ function OrderSuccess() {
 
         <p className="success-footer">
 
-          Please keep your order number for reference.
+          Please keep your order number{" "}
+          <strong>
+            {orderNumber}
+          </strong>{" "}
+          for reference.
 
         </p>
 
