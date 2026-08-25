@@ -7,14 +7,42 @@ import {
   ArrowLeft,
 } from "lucide-react";
 
+import { useLocation, useNavigate } from "react-router-dom";
+
 import "./OrderSuccess.css";
 
 
 function OrderSuccess() {
 
-  const orderNumber = "ORD-024";
+  const location = useLocation();
+  const navigate = useNavigate();
 
-  const total = 760;
+
+  // ==========================================
+  // GET REAL ORDER DATA
+  // ==========================================
+
+  const order = location.state?.order;
+
+
+  // Real values from backend
+  const orderNumber =
+    order?.orderNumber || "—";
+
+  const total =
+    Number(order?.total) || 0;
+
+  const status =
+    order?.status || "pending";
+
+
+  // ==========================================
+  // STATUS LABEL
+  // ==========================================
+
+  const statusLabel =
+    status.charAt(0).toUpperCase() +
+    status.slice(1);
 
 
   return (
@@ -27,9 +55,7 @@ function OrderSuccess() {
         ====================================== */}
 
         <div className="success-icon">
-
           <Check size={28} />
-
         </div>
 
 
@@ -105,8 +131,11 @@ function OrderSuccess() {
               </span>
 
               <strong className="status-pending">
+
                 <span />
-                Pending
+
+                {statusLabel}
+
               </strong>
 
             </div>
@@ -150,9 +179,7 @@ function OrderSuccess() {
 
           <button
             className="success-primary-button"
-            onClick={() =>
-              window.location.href = "/menu"
-            }
+            onClick={() => navigate("/menu")}
           >
             Order something else
           </button>
@@ -160,9 +187,7 @@ function OrderSuccess() {
 
           <button
             className="success-secondary-button"
-            onClick={() =>
-              window.location.href = "/"
-            }
+            onClick={() => navigate("/")}
           >
             <ArrowLeft size={14} />
             Back to cafe
@@ -179,6 +204,7 @@ function OrderSuccess() {
 
     </main>
   );
+
 }
 
 
